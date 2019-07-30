@@ -8,11 +8,32 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
+library(ggplot2)
+library(sqldf)
 ```
 
 ## Load the data
 ```{r}
 attrition_data = read_csv('atttrition.csv')
+
+```
+## EDA Phase 1: Plotting
+  
+```{r}
+#let's partiton by attrition and look at the data a bit
+left_data = sqldf("SELECT * FROM attrition_data WHERE Attrition = 'Yes'")
+stayed_data = sqldf("SELECT * FROM attrition_data WHERE Attrition = 'No'")
+
+ggplot(data=left_data, aes(left_data$Age)) + geom_histogram(binwidth = 3) 
+ggplot(data=stayed_data, aes(stayed_data$Age)) + geom_histogram(binwidth = 3) 
+
+counts_by_department = sqldf('SELECT 
+                                  Department
+                                  ,Attrition
+                                  ,COUNT(*) 
+                             FROM attrition_data 
+                             GROUP BY Department
+                                     , Attrition')
 
 ```
 
