@@ -7,13 +7,16 @@ install.packages("mlbench")
 library(mlr)
 library(mlbench)
 
-data(BostonHousing, package="mlbench")
+attrition_data = read.csv('../skennedy/thundercats_dds_case_study_2/atttrition.csv')
 
-head(BostonHousing)
+
+data(attrition_data, package="mlbench")
+
+head(attrition_data)
 
 #need to specify target variable for supervised learning
 #for classification, the column has to be a factor
-regr.task = makeRegrTask(id = "bh", data = BostonHousing, target = "medv")
+regr.task = makeRegrTask(id = "attrition", data = attrition_data, target = "Attrition")
 
 #basic info of a task
 getTaskDesc(regr.task)

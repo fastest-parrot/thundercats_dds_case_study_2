@@ -19,6 +19,7 @@ attrition_data = read_csv('atttrition.csv')
 ```
 ## EDA Phase 1: Plotting
   
+  # By Age (abstract into histogram analysis?)
 ```{r}
 #let's partiton by attrition and look at the data a bit
 left_data = sqldf("SELECT * FROM attrition_data WHERE Attrition = 'Yes'")
@@ -27,19 +28,36 @@ stayed_data = sqldf("SELECT * FROM attrition_data WHERE Attrition = 'No'")
 ggplot(data=left_data, aes(left_data$Age)) + geom_histogram(binwidth = 3) 
 ggplot(data=stayed_data, aes(stayed_data$Age)) + geom_histogram(binwidth = 3) 
 
+```
+ # By Department (abstract into categorical analysis)
+
+```{r}
+
 counts_by_department = sqldf('SELECT 
                                   Department
                                   ,Attrition
-                                  ,COUNT(*) 
+                                  ,COUNT(*)*1.0  as Count
                              FROM attrition_data 
                              GROUP BY Department
                                      , Attrition')
 
+yes_by_department =sqldf("SELECT * FROM counts_by_department WHERE Attrition = 'Yes'")
+no_by_department =sqldf("SELECT * FROM counts_by_department WHERE Attrition = 'No'")
+
+ggplot(yes_by_department, aes(x=yes_by_department$Department, y=yes_by_department$Count, fill=yes_by_department$Department)) + geom_bar(stat = "identity") + labs(x = 'Department', y='# Attrition', fill='Department') 
+ggplot(no_by_department, aes(x=no_by_department$Department, y=no_by_department$Count, fill=no_by_department$Department)) + geom_bar(stat = "identity") + labs(x = 'Department', y='# Attrition', fill='Department') 
+
+attrition_rates = sqldf("SELECT
+          y.Department,
+          y.Count as Departed,
+          n.Count as Employed,
+          (y.Count/(n.Count + y.Count)) as AttritionRate
+       FROM yes_by_department y
+       LEFT JOIN no_by_department n ON n.Department = y.Department")
+
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
 
 ```{r pressure, echo=FALSE}
 plot(pressure)
