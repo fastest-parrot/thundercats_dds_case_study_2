@@ -10,11 +10,12 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(ggplot2)
 library(sqldf)
+library(dplyr)
 ```
 
 ## Load the data
 ```{r}
-attrition_data = read_csv('atttrition.csv')
+attrition_data = read.csv('atttrition.csv', stringsAsFactors=TRUE)
 
 ```
 ## EDA Phase 1: Plotting
@@ -29,38 +30,54 @@ ggplot(data=left_data, aes(left_data$Age)) + geom_histogram(binwidth = 3)
 ggplot(data=stayed_data, aes(stayed_data$Age)) + geom_histogram(binwidth = 3) 
 
 ```
- # By Department (abstract into categorical analysis)
 
 ```{r}
+#helper function for quick viz of percentage of employees that have left
+attrition_by_category <- function(category){
 
-counts_by_department = sqldf('SELECT 
-                                  Department
+sql_statement = glue::glue('SELECT 
+                                  {category}
                                   ,Attrition
                                   ,COUNT(*)*1.0  as Count
                              FROM attrition_data 
-                             GROUP BY Department
-                                     , Attrition')
+                             GROUP BY {category}
+                                     , Attrition')  
+  
+counts = sqldf(sql_statement)
 
-yes_by_department =sqldf("SELECT * FROM counts_by_department WHERE Attrition = 'Yes'")
-no_by_department =sqldf("SELECT * FROM counts_by_department WHERE Attrition = 'No'")
+yes =sqldf("SELECT * FROM counts WHERE Attrition = 'Yes'")
+no =sqldf("SELECT * FROM counts WHERE Attrition = 'No'")
 
-ggplot(yes_by_department, aes(x=yes_by_department$Department, y=yes_by_department$Count, fill=yes_by_department$Department)) + geom_bar(stat = "identity") + labs(x = 'Department', y='# Attrition', fill='Department') 
-ggplot(no_by_department, aes(x=no_by_department$Department, y=no_by_department$Count, fill=no_by_department$Department)) + geom_bar(stat = "identity") + labs(x = 'Department', y='# Attrition', fill='Department') 
+yes_bar = ggplot(yes, aes(x=yes[,category], y=yes$Count, fill=yes[,category])) + geom_bar(stat = "identity") + labs(x = category, y='# Attrition', fill=category) 
+no_bar = ggplot(no, aes(x=no[,category], y=no$Count, fill=no[,category])) + geom_bar(stat = "identity") + labs(x = category, y='# Attrition', fill=category) 
 
-attrition_rates = sqldf("SELECT
-          y.Department,
+attrition_rates = sqldf(glue::glue('SELECT
+          y.{category},
           y.Count as Departed,
           n.Count as Employed,
           (y.Count/(n.Count + y.Count)) as AttritionRate
-       FROM yes_by_department y
-       LEFT JOIN no_by_department n ON n.Department = y.Department")
+       FROM yes y
+       LEFT JOIN no n ON n.{category} = y.{category}'))
+plot(no_bar)
+plot(yes_bar)
+print(attrition_rates)
+#return(list(attrition_rates, yes_bar, no_bar))
+}
 
+#helper function for extracting col names
+#TODO: add cols that are factors but also ints 
+factor_columns <- function(dataFrame){
+  return(colnames(dataFrame[,sapply(dataFrame, is.factor) & colnames(dataFrame) != "id"]))
+}
 ```
 
+ # Analysis by factor
 
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+factors = factor_columns(attrition_data)
+for(f in factors){
+  attrition_by_category(f)
+}
+
 ```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
