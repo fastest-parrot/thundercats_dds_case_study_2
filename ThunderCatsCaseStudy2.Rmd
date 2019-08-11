@@ -24,6 +24,10 @@ attrition_data = read.csv('atttrition.csv', stringsAsFactors=TRUE)
 ## EDA Phase 1: Plotting
   
   # By Age (abstract into histogram analysis?)
+  
+## Variable Ranks
+  
+  #Colinearity checks
 ```{r}
 #let's partiton by attrition and look at the data a bit
 left_data = sqldf("SELECT * FROM attrition_data WHERE Attrition = 'Yes'")
@@ -90,13 +94,18 @@ for(f in factors){
   - Overtime seems to be an important factor when considering attrition rate. OF the 416 employees that worked overtime, nearly 30% of them left their positions.
   
 ```{r}
-sample = select(attrition_data, BusinessTravel,Department,EducationField,Attrition, OverTime)
+target = c('Attrition')
+model = c('BusinessTravel','Department','EducationField', 'OverTime', 'Gender', 'HourlyRate', 'JobInvolvement', 'JobLevel')
+target_string = glue::glue("{target} ~ ")
+f = target_string + paste(model, collapse="+")
+
+sample = select(attrition_data, model, target)
 str(sample)
 summary(sample)
 
 #Train Test Split
 seed = 1234
-sample_size = floor(0.5*nrow(sample))
+sample_size = floor(0.75*nrow(sample))
 set.seed(seed)
 train_set = sample(seq_len(nrow(sample)), size=sample_size)
 
@@ -104,15 +113,17 @@ train = sample[train_set,]
 test = sample[-train_set,]
 summary(train)
 summary(test)
+
 #Build the model
-linear_model <-vglm(Attrition~BusinessTravel+Department+EducationField+OverTime,family = "multinomial",data=train)
+linear_model <-vglm(as.formula(f),family = "multinomial",data=train)
+
 
 #Summarize the model
 summary(linear_model)
 
 #Run Predictions
-x<-select(test, -Attrition)
-y<-select(test, Attrition)
+x<-select(test, -target)
+y<-select(test, target)
 
 probability<-predict(linear_model,x,type="response")
 test$pred_log_reg<-apply(probability,1,which.max)
