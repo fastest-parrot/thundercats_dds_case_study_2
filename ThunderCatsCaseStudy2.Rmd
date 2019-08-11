@@ -11,6 +11,9 @@ library(tidyverse)
 library(ggplot2)
 library(sqldf)
 library(dplyr)
+library(VGAM)
+library(caret)
+
 ```
 
 ## Load the data
@@ -55,6 +58,7 @@ attrition_rates = sqldf(glue::glue('SELECT
           y.{category},
           y.Count as Departed,
           n.Count as Employed,
+          (y.Count + n.Count) as Total,
           (y.Count/(n.Count + y.Count)) as AttritionRate
        FROM yes y
        LEFT JOIN no n ON n.{category} = y.{category}'))
@@ -79,5 +83,46 @@ factors = factor_columns(attrition_data)
 for(f in factors){
   attrition_by_category(f)
 }
+
+```
+# Analysis:
+  
+  - Overtime seems to be an important factor when considering attrition rate. OF the 416 employees that worked overtime, nearly 30% of them left their positions.
+  
+```{r}
+sample = select(attrition_data, BusinessTravel,Department,EducationField,Attrition, OverTime)
+str(sample)
+summary(sample)
+
+#Train Test Split
+seed = 1234
+sample_size = floor(0.5*nrow(sample))
+set.seed(seed)
+train_set = sample(seq_len(nrow(sample)), size=sample_size)
+
+train = sample[train_set,]
+test = sample[-train_set,]
+summary(train)
+summary(test)
+#Build the model
+linear_model <-vglm(Attrition~BusinessTravel+Department+EducationField+OverTime,family = "multinomial",data=train)
+
+#Summarize the model
+summary(linear_model)
+
+#Run Predictions
+x<-select(test, -Attrition)
+y<-select(test, Attrition)
+
+probability<-predict(linear_model,x,type="response")
+test$pred_log_reg<-apply(probability,1,which.max)
+test$pred_log_reg[which(test$pred_log_reg=="1")]<-levels(test$Attrition)[1]
+test$pred_log_reg[which(test$pred_log_reg=="2")]<-levels(test$Attrition)[2]
+
+
+
+#Accuracy of the model
+mtab<-table(test$pred_log_reg,test$Attrition)
+confusionMatrix(mtab)
 
 ```
