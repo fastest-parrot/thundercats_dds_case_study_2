@@ -8,20 +8,194 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
+library(ggplot2)
+library(sqldf)
+library(dplyr)
+library(VGAM)
+library(caret)
+
 ```
 
 ## Load the data
 ```{r}
-attrition_data = read_csv('atttrition.csv')
+attrition_data = read.csv('atttrition.csv', stringsAsFactors=TRUE)
+
+```
+## EDA Phase 1: Plotting
+  
+  # By Age (abstract into histogram analysis?)
+  
+## Variable Ranks
+  
+  #Colinearity checks
+```{r}
+#let's partiton by attrition and look at the data a bit
+left_data = sqldf("SELECT * FROM attrition_data WHERE Attrition = 'Yes'")
+stayed_data = sqldf("SELECT * FROM attrition_data WHERE Attrition = 'No'")
+
+ggplot(data=left_data, aes(left_data$Age)) + geom_histogram(binwidth = 3) 
+ggplot(data=stayed_data, aes(stayed_data$Age)) + geom_histogram(binwidth = 3) 
 
 ```
 
-## Including Plots
+```{r}
+#helper function for quick viz of percentage of employees that have left
+attrition_by_category <- function(category){
 
-You can also embed plots, for example:
+sql_statement = glue::glue('SELECT 
+                                  {category}
+                                  ,Attrition
+                                  ,COUNT(*)*1.0  as Count
+                             FROM attrition_data 
+                             GROUP BY {category}
+                                     , Attrition')  
+  
+counts = sqldf(sql_statement)
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+yes =sqldf("SELECT * FROM counts WHERE Attrition = 'Yes'")
+no =sqldf("SELECT * FROM counts WHERE Attrition = 'No'")
+
+yes_bar = ggplot(yes, aes(x=yes[,category], y=yes$Count, fill=yes[,category])) + geom_bar(stat = "identity") + labs(x = category, y='# Attrition', fill=category) 
+no_bar = ggplot(no, aes(x=no[,category], y=no$Count, fill=no[,category])) + geom_bar(stat = "identity") + labs(x = category, y='# Attrition', fill=category) 
+
+attrition_rates = sqldf(glue::glue('SELECT
+          y.{category},
+          y.Count as Departed,
+          n.Count as Employed,
+          (y.Count + n.Count) as Total,
+          (y.Count/(n.Count + y.Count)) as AttritionRate
+       FROM yes y
+       LEFT JOIN no n ON n.{category} = y.{category}'))
+plot(no_bar)
+plot(yes_bar)
+print(attrition_rates)
+#return(list(attrition_rates, yes_bar, no_bar))
+}
+
+#helper function for extracting col names
+#TODO: add cols that are factors but also ints 
+factor_columns <- function(dataFrame){
+  return(colnames(dataFrame[,sapply(dataFrame, is.factor) & colnames(dataFrame) != "id"]))
+}
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+ # Analysis by factor
+
+
+```{r}
+factors = factor_columns(attrition_data)
+for(f in factors){
+  attrition_by_category(f)
+}
+
+```
+# Analysis:
+  
+  - Overtime seems to be an important factor when considering attrition rate. OF the 416 employees that worked overtime, nearly 30% of them left their positions.
+  
+```{r}
+target = c('Attrition')
+columns = c('BusinessTravel','Department','EducationField', 'OverTime', 'Gender', 'HourlyRate', 'JobInvolvement', 'JobLevel', 'MaritalStatus', 'NumCompaniesWorked', 'PerformanceRating')
+
+interactions = c() #c('HourlyRate:OverTime', 'JobInvolvement:JobLevel')
+model = c(columns, interactions)
+
+target_string = glue::glue("{target} ~ ")
+f = target_string + paste(model, collapse="+")
+
+sample = select(attrition_data, columns, target)
+
+
+#Train Test Split
+seed = 1234
+sample_size = floor(0.75*nrow(sample))
+set.seed(seed)
+train_set = sample(seq_len(nrow(sample)), size=sample_size)
+
+train = sample[train_set,]
+test = sample[-train_set,]
+
+
+#Build the model
+linear_model <-vglm(as.formula(f),family = "multinomial",data=train)
+
+
+#Summarize the model
+summary(linear_model)
+
+#Run Predictions
+x<-select(test, -target)
+y<-select(test, target)
+
+probability<-predict(linear_model,x,type="response")
+test$pred_log_reg<-apply(probability,1,which.max)
+test$pred_log_reg[which(test$pred_log_reg=="1")]<-levels(test[,target])[1]
+test$pred_log_reg[which(test$pred_log_reg=="2")]<-levels(test[,target])[2]
+
+
+str(f)
+#Accuracy of the model
+mtab<-table(test$pred_log_reg,test[,target])
+confusionMatrix(mtab)
+
+```
+
+```{r}
+run_linear_model <- function(target, columns, interactions=c()){
+    model = c(columns, interactions)
+    
+    target_string = glue::glue("{target} ~ ")
+    f = target_string + paste(model, collapse="+")
+    
+    sample = select(attrition_data, columns, target)
+    
+    
+    #Train Test Split
+    seed = 1234
+    sample_size = floor(0.75*nrow(sample))
+    set.seed(seed)
+    train_set = sample(seq_len(nrow(sample)), size=sample_size)
+    
+    train = sample[train_set,]
+    test = sample[-train_set,]
+    
+    
+    #Build the model
+    linear_model <-vglm(as.formula(f),family = "multinomial",data=train)
+    
+    
+    #Summarize the model
+    print(summary(linear_model))
+    
+    #Run Predictions
+    x<-select(test, -target)
+    y<-select(test, target)
+    
+    probability<-predict(linear_model,x,type="response")
+    test$pred_log_reg<-apply(probability,1,which.max)
+    test$pred_log_reg[which(test$pred_log_reg=="1")]<-levels(test[,target])[1]
+    test$pred_log_reg[which(test$pred_log_reg=="2")]<-levels(test[,target])[2]
+    
+    
+    str(f)
+    #Accuracy of the model
+    mtab<-table(test$pred_log_reg,test[,target])
+    confusionMatrix(mtab)
+}
+target = c('Attrition')
+columns = c('BusinessTravel','Department','EducationField', 'OverTime', 'Gender', 'HourlyRate', 'JobInvolvement', 'JobLevel', 'MaritalStatus', 'NumCompaniesWorked', 'PerformanceRating')
+
+interactions = c() #c('HourlyRate:OverTime', 'JobInvolvement:JobLevel')
+run_linear_model(target, columns, interactions)
+```
+
+# Check train vs test sets for bias
+
+
+```{r}
+str(sample)
+summary(sample)
+summary(train)
+summary(test)
+
+```
