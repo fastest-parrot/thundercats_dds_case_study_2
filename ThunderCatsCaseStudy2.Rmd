@@ -95,13 +95,16 @@ for(f in factors){
   
 ```{r}
 target = c('Attrition')
-model = c('BusinessTravel','Department','EducationField', 'OverTime', 'Gender', 'HourlyRate', 'JobInvolvement', 'JobLevel')
+columns = c('BusinessTravel','Department','EducationField', 'OverTime', 'Gender', 'HourlyRate', 'JobInvolvement', 'JobLevel', 'MaritalStatus', 'NumCompaniesWorked', 'PerformanceRating')
+
+interactions = c() #c('HourlyRate:OverTime', 'JobInvolvement:JobLevel')
+model = c(columns, interactions)
+
 target_string = glue::glue("{target} ~ ")
 f = target_string + paste(model, collapse="+")
 
-sample = select(attrition_data, model, target)
-str(sample)
-summary(sample)
+sample = select(attrition_data, columns, target)
+
 
 #Train Test Split
 seed = 1234
@@ -111,8 +114,7 @@ train_set = sample(seq_len(nrow(sample)), size=sample_size)
 
 train = sample[train_set,]
 test = sample[-train_set,]
-summary(train)
-summary(test)
+
 
 #Build the model
 linear_model <-vglm(as.formula(f),family = "multinomial",data=train)
@@ -127,13 +129,73 @@ y<-select(test, target)
 
 probability<-predict(linear_model,x,type="response")
 test$pred_log_reg<-apply(probability,1,which.max)
-test$pred_log_reg[which(test$pred_log_reg=="1")]<-levels(test$Attrition)[1]
-test$pred_log_reg[which(test$pred_log_reg=="2")]<-levels(test$Attrition)[2]
+test$pred_log_reg[which(test$pred_log_reg=="1")]<-levels(test[,target])[1]
+test$pred_log_reg[which(test$pred_log_reg=="2")]<-levels(test[,target])[2]
 
 
-
+str(f)
 #Accuracy of the model
-mtab<-table(test$pred_log_reg,test$Attrition)
+mtab<-table(test$pred_log_reg,test[,target])
 confusionMatrix(mtab)
+
+```
+
+```{r}
+run_linear_model <- function(target, columns, interactions=c()){
+    model = c(columns, interactions)
+    
+    target_string = glue::glue("{target} ~ ")
+    f = target_string + paste(model, collapse="+")
+    
+    sample = select(attrition_data, columns, target)
+    
+    
+    #Train Test Split
+    seed = 1234
+    sample_size = floor(0.75*nrow(sample))
+    set.seed(seed)
+    train_set = sample(seq_len(nrow(sample)), size=sample_size)
+    
+    train = sample[train_set,]
+    test = sample[-train_set,]
+    
+    
+    #Build the model
+    linear_model <-vglm(as.formula(f),family = "multinomial",data=train)
+    
+    
+    #Summarize the model
+    print(summary(linear_model))
+    
+    #Run Predictions
+    x<-select(test, -target)
+    y<-select(test, target)
+    
+    probability<-predict(linear_model,x,type="response")
+    test$pred_log_reg<-apply(probability,1,which.max)
+    test$pred_log_reg[which(test$pred_log_reg=="1")]<-levels(test[,target])[1]
+    test$pred_log_reg[which(test$pred_log_reg=="2")]<-levels(test[,target])[2]
+    
+    
+    str(f)
+    #Accuracy of the model
+    mtab<-table(test$pred_log_reg,test[,target])
+    confusionMatrix(mtab)
+}
+target = c('Attrition')
+columns = c('BusinessTravel','Department','EducationField', 'OverTime', 'Gender', 'HourlyRate', 'JobInvolvement', 'JobLevel', 'MaritalStatus', 'NumCompaniesWorked', 'PerformanceRating')
+
+interactions = c() #c('HourlyRate:OverTime', 'JobInvolvement:JobLevel')
+run_linear_model(target, columns, interactions)
+```
+
+# Check train vs test sets for bias
+
+
+```{r}
+str(sample)
+summary(sample)
+summary(train)
+summary(test)
 
 ```
