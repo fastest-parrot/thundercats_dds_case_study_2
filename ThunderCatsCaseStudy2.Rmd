@@ -19,25 +19,35 @@ library(nnet)
 ## Load the data
 ```{r}
 attrition_data = read.csv('atttrition.csv', stringsAsFactors=TRUE)
-
+drop_cols = c('Over18', 'EmployeeNumber', 'EmployeeCount', 'StandardHours')
+attrition_data[,drop_cols] = list(NULL)
+attrition_data = sqldf("SELECT * FROM attrition_data WHERE JobRole <> 'Research Director'")
 ```
 
 
 
 ```{r}
+x = generate_interaction_string(c('Test', 'Test1', 'Test3'))
+x
 #helper functions
+generate_interaction_string <- function(columns, depth){
+    f = paste(columns, ':')
+    return(f)
+}
+
 build_model_string <- function(target, columns, interactions=c()){
+    
     model = c(columns, interactions)
     target_string = glue::glue("{target} ~ ")
     f = target_string + paste(model, collapse="+")
     return(f)
 }
 
-run_linear_model <- function(target, columns, interactions=c()){
+run_linear_model <- function(data, target, columns, interactions=c()){
     model = c(columns, interactions)
     f = build_model_string(target, columns, interactions)
     
-    sample = select(attrition_data, columns, target)
+    sample = select(data, columns, target)
     
     
     #Train Test Split
@@ -72,11 +82,11 @@ run_linear_model <- function(target, columns, interactions=c()){
     mtab<-table(test$pred_log_reg,test[,target])
     confusionMatrix(mtab)
 }
-run_nn_model <- function(target, columns, interactions=c()){
+run_nn_model <- function(data, target, columns, interactions=c()){
     model = c(columns, interactions)
     f = build_model_string(target, columns, interactions)
     
-    sample = select(attrition_data, columns, target)
+    sample = select(data, columns, target)
     
     
     #Train Test Split
@@ -104,7 +114,9 @@ run_nn_model <- function(target, columns, interactions=c()){
     test$pred_nnet<-predict(neural_model,x,type='class')
     str(f)
     #Accuracy of the model
+  
     mtab<-table(test$pred_nnet,test[,target])
+    print(summary(mtab))
     confusionMatrix(mtab)
     
     
@@ -185,13 +197,15 @@ for(f in factors){
   - Overtime seems to be an important factor when considering attrition rate. OF the 416 employees that worked overtime, nearly 30% of them left their positions.
   
 ```{r}
-target = c('Attrition')
-columns = c('BusinessTravel','EducationField','EnvironmentSatisfaction', 'OverTime', 'Gender', 'HourlyRate', 'JobInvolvement', 'JobLevel', 'MaritalStatus', 'NumCompaniesWorked', 'PerformanceRating', 'JobRole', 'Age')
 
-interactions = c('HourlyRate:OverTime', 'JobInvolvement:JobLevel')
-run_linear_model(target, columns, interactions)
-run_nn_model(target, columns, interactions)
+experiment_target = c('Attrition')
+experiment_columns = c('BusinessTravel','EducationField','EnvironmentSatisfaction', 'OverTime', 'Gender', 'HourlyRate', 'JobInvolvement', 'JobLevel', 'MaritalStatus', 'NumCompaniesWorked', 'PerformanceRating', 'JobRole', 'Age')
+
+experiment_interactions = c('HourlyRate:OverTime', 'JobInvolvement:JobLevel:OverTime')
+run_linear_model(attrition_data, experiment_target, experiment_columns, experiment_interactions)
+run_nn_model(attrition_data, experiment_target, experiment_columns, experiment_interactions)
 ```
+
 
 
 
