@@ -16,8 +16,16 @@ library(caret)
 library(nnet)
 ```
 
-## Load the data
-```{r}
+  # loadData: Load the data
+
+  # generate_interaction_string: Function for generating interaction terms
+  
+  # build_model_string: Generates contrast equation for regression
+  
+  # run_linear_model: builds/test/summarizes a linear regression model using VGAM
+  
+  # run_neural_model: builds/test/summarizes a neuralnetwork model using nnet
+```{r, echo=FALSE}
 loadData <-function(){
   attrition_data = read.csv('atttrition.csv', stringsAsFactors=TRUE)
   drop_cols = c('Over18', 'EmployeeNumber', 'EmployeeCount', 'StandardHours')
@@ -31,12 +39,6 @@ loadData <-function(){
   return(attrition_data)
   #attrition_data$Education = factor(attrition_data$Education)
 }
-
-```
-
-
-
-```{r}
 #helper functions
 generate_interaction_string <- function(columns, depth){
     f = paste(columns, ':')
@@ -132,26 +134,6 @@ run_nn_model <- function(data, target, columns, interactions=c()){
   
    
 }
-```
-## EDA Phase 1: Plotting
-  
-  # By Age (abstract into histogram analysis?)
-  
-## Variable Ranks
-  
-  #Colinearity checks?
-```{r}
-attrition_data = loadData()
-#let's partiton by attrition and look at the data a bit
-left_data = sqldf("SELECT * FROM attrition_data WHERE Attrition = 'Yes'")
-stayed_data = sqldf("SELECT * FROM attrition_data WHERE Attrition = 'No'")
-
-ggplot(data=left_data, aes(left_data$Age)) + geom_histogram(binwidth = 3) 
-ggplot(data=stayed_data, aes(stayed_data$Age)) + geom_histogram(binwidth = 3) 
-
-```
-
-```{r}
 #helper function for quick viz of percentage of employees that have left
 attrition_by_category <- function(category){
 
@@ -190,6 +172,27 @@ print(attrition_rates)
 factor_columns <- function(dataFrame){
   return(colnames(dataFrame[,sapply(dataFrame, is.factor) & colnames(dataFrame) != "id"]))
 }
+```
+## EDA Phase 1: Plotting
+  
+  # By Age (abstract into histogram analysis?)
+  
+## Variable Ranks
+  
+  #Colinearity checks?
+```{r}
+attrition_data = loadData()
+#let's partiton by attrition and look at the data a bit
+left_data = sqldf("SELECT * FROM attrition_data WHERE Attrition = 'Yes'")
+stayed_data = sqldf("SELECT * FROM attrition_data WHERE Attrition = 'No'")
+
+ggplot(data=left_data, aes(left_data$Age)) + geom_histogram(binwidth = 3) 
+ggplot(data=stayed_data, aes(stayed_data$Age)) + geom_histogram(binwidth = 3) 
+
+```
+
+```{r}
+
 ```
 
  # Analysis by factor
