@@ -28,6 +28,7 @@ loadData <-function(){
   
   #hacky - sqlDF is fucking up my colnames
   names(attrition_data)[1] = 'Age'
+  return(attrition_data)
   #attrition_data$Education = factor(attrition_data$Education)
 }
 
@@ -46,7 +47,8 @@ build_model_string <- function(target, columns, interactions=c()){
     
     model = c(columns, interactions)
     target_string = glue::glue("{target} ~ ")
-    f = target_string + paste(model, collapse="+")
+    model_string = paste(model, collapse="+")
+    f = target_string + model_string
     return(f)
 }
 
@@ -139,6 +141,7 @@ run_nn_model <- function(data, target, columns, interactions=c()){
   
   #Colinearity checks?
 ```{r}
+attrition_data = loadData()
 #let's partiton by attrition and look at the data a bit
 left_data = sqldf("SELECT * FROM attrition_data WHERE Attrition = 'Yes'")
 stayed_data = sqldf("SELECT * FROM attrition_data WHERE Attrition = 'No'")
@@ -204,7 +207,7 @@ for(f in factors){
   - Overtime seems to be an important factor when considering attrition rate. OF the 416 employees that worked overtime, nearly 30% of them left their positions.
   
 ```{r}
-loadData()
+experiment_data = loadData()
 experiment_target = c('Attrition')
 experiment_columns = c(
                           'BusinessTravel'
@@ -239,9 +242,9 @@ experiment_columns = c(
                         , 'YearsWithCurrManager')
 
 experiment_interactions = c()
-run_linear_model(attrition_data, experiment_target, experiment_columns, experiment_interactions)
+run_linear_model(experiment_data, experiment_target, experiment_columns, experiment_interactions)
 
-#run_nn_model(attrition_data, experiment_target, experiment_columns, experiment_interactions)
+#run_nn_model(experiment_data, experiment_target, experiment_columns, experiment_interactions)
 ```
 ## Full model analysis
 
@@ -257,7 +260,7 @@ run_linear_model(attrition_data, experiment_target, experiment_columns, experime
 ## Let's try a reduced model
 
 ```{r}
-loadData()
+experiment_data  =loadData()
 experiment_target = c('Attrition')
 experiment_columns = c(
                           'BusinessTravel'
@@ -274,8 +277,10 @@ experiment_columns = c(
                         , 'YearsSinceLastPromotion'
                         , 'YearsWithCurrManager')
 
-experiment_interactions = c()
-run_linear_model(attrition_data, experiment_target, experiment_columns, experiment_interactions)
+experiment_interactions =c()# c('JobLevel:YearsSinceLastPromotion:EnvironmentSatisfaction')
+run_linear_model(experiment_data, experiment_target, experiment_columns, experiment_interactions)
+run_nn_model(experiment_data, experiment_target, experiment_columns, experiment_interactions)
+
 
 ```
     
