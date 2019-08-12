@@ -159,12 +159,38 @@ return(ggplot(counts, aes(counts[,category], counts$Count)) + geom_bar(aes(fill 
 factor_columns <- function(dataFrame){
   return(colnames(dataFrame[,sapply(dataFrame, is.factor) & colnames(dataFrame) != "id"]))
 }
+
+plotSatisfaction <- function(category, data){
+  sql = glue::glue('SELECT
+                   {category},
+                   AVG(satisfaction_index) as AverageHappiness
+                   FROM data
+                   GROUP BY {category}')
+  happiness = sqldf(sql)
+  return(ggplot(happiness, aes(happiness[,category], happiness$AverageHappiness)) + geom_bar(aes(fill = category), 
+   width = 0.4, position = position_dodge(width=0.5), stat="identity") +  
+   theme(legend.position="top", legend.title = 
+   element_text(),axis.title.x=element_text(), 
+   axis.title.y=element_text()))
+}
 ```
 
-## EDA Phase 1: Plotting
+## EDA Exploratory Questions
   
-  # By Age (abstract into histogram analysis?)
-  
+   # Job Satisfaction
+    
+   As a proxy for happiness with current employment, we will construct an index = EnvironmentSatisfaction + JobInvolvement + JobSatisfaction (tried this - didn't do much) and look for trends across the categorical variables.
+   
+```{r, echo=FALSE}
+satisfaction_data = loadData()
+satisfaction_data = sqldf('SELECT s.*,  
+                            JobSatisfaction as satisfaction_index
+                            FROM satisfaction_data s')
+
+for(x in factor_columns(satisfaction_data)){
+  print(plotSatisfaction(x, satisfaction_data))
+}
+```
 
   
 ## Variable Ranks
@@ -278,6 +304,8 @@ experiment_factor_columms = c(
                         , 'JobSatisfaction'
                         , 'MaritalStatus'
                         , 'WorkLifeBalance')
+
+
 for(f in experiment_factor_columms){
   print(attrition_by_category(f, experiment_data))
 }
