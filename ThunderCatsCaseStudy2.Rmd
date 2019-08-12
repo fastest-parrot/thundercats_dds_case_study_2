@@ -18,17 +18,24 @@ library(nnet)
 
 ## Load the data
 ```{r}
-attrition_data = read.csv('atttrition.csv', stringsAsFactors=TRUE)
-drop_cols = c('Over18', 'EmployeeNumber', 'EmployeeCount', 'StandardHours')
-attrition_data[,drop_cols] = list(NULL)
-attrition_data = sqldf("SELECT * FROM attrition_data WHERE JobRole <> 'Research Director'")
+loadData <-function(){
+  attrition_data = read.csv('atttrition.csv', stringsAsFactors=TRUE)
+  drop_cols = c('Over18', 'EmployeeNumber', 'EmployeeCount', 'StandardHours')
+  attrition_data[,drop_cols] = list(NULL)
+
+  #potentially biasing Observation(s)?
+  attrition_data = sqldf("SELECT * FROM attrition_data WHERE JobRole <> 'Research Director'")
+  
+  #hacky - sqlDF is fucking up my colnames
+  names(attrition_data)[1] = 'Age'
+  #attrition_data$Education = factor(attrition_data$Education)
+}
+
 ```
 
 
 
 ```{r}
-x = generate_interaction_string(c('Test', 'Test1', 'Test3'))
-x
 #helper functions
 generate_interaction_string <- function(columns, depth){
     f = paste(columns, ':')
@@ -197,16 +204,81 @@ for(f in factors){
   - Overtime seems to be an important factor when considering attrition rate. OF the 416 employees that worked overtime, nearly 30% of them left their positions.
   
 ```{r}
-
+loadData()
 experiment_target = c('Attrition')
-experiment_columns = c('BusinessTravel','EducationField','EnvironmentSatisfaction', 'OverTime', 'Gender', 'HourlyRate', 'JobInvolvement', 'JobLevel', 'MaritalStatus', 'NumCompaniesWorked', 'PerformanceRating', 'JobRole', 'Age')
+experiment_columns = c(
+                          'BusinessTravel'
+                        , 'Department'
+                        , 'DistanceFromHome'
+                        , 'EducationField'
+                        , 'EnvironmentSatisfaction'
+                        , 'OverTime'
+                        , 'Gender'
+                        , 'HourlyRate'
+                        , 'DailyRate'
+                        , 'JobInvolvement'
+                        , 'JobLevel'
+                        , 'Education'
+                        , 'JobSatisfaction'
+                        , 'MaritalStatus'
+                        , 'MonthlyIncome'
+                        , 'MonthlyRate'
+                        , 'NumCompaniesWorked'
+                        , 'PerformanceRating'
+                        , 'PercentSalaryHike'
+                        , 'JobRole'
+                        , 'Age'
+                        , 'RelationshipSatisfaction'
+                        , 'StockOptionLevel'
+                        , 'TotalWorkingYears'
+                        , 'WorkLifeBalance'
+                        , 'TrainingTimesLastYear'
+                        , 'YearsAtCompany'
+                        , 'YearsInCurrentRole'
+                        , 'YearsSinceLastPromotion'
+                        , 'YearsWithCurrManager')
 
-experiment_interactions = c('HourlyRate:OverTime', 'JobInvolvement:JobLevel:OverTime')
+experiment_interactions = c()
 run_linear_model(attrition_data, experiment_target, experiment_columns, experiment_interactions)
-run_nn_model(attrition_data, experiment_target, experiment_columns, experiment_interactions)
+
+#run_nn_model(attrition_data, experiment_target, experiment_columns, experiment_interactions)
 ```
+## Full model analysis
 
+    Accuracy of 84.17% vs target balance of {}
+    
+    
+    Statistically Significant Features:
+    
+    Travel, DistanceFromHome, EnvironmentSatisfaction, OverTime, JobInvolvement, JobLevel, 
+    JobSatisfaction, MaritalStatus, NumCompaniesWorked, WorkLifeBalance, YearsInCurrentRole,
+    YearsSinceLastPromotion, YearsWithCurrManager
 
+## Let's try a reduced model
+
+```{r}
+loadData()
+experiment_target = c('Attrition')
+experiment_columns = c(
+                          'BusinessTravel'
+                        , 'DistanceFromHome'
+                        , 'EnvironmentSatisfaction'
+                        , 'OverTime'
+                        , 'JobInvolvement'
+                        , 'JobLevel'
+                        , 'JobSatisfaction'
+                        , 'MaritalStatus'
+                        , 'NumCompaniesWorked'
+                        , 'WorkLifeBalance'
+                        , 'YearsInCurrentRole'
+                        , 'YearsSinceLastPromotion'
+                        , 'YearsWithCurrManager')
+
+experiment_interactions = c()
+run_linear_model(attrition_data, experiment_target, experiment_columns, experiment_interactions)
+
+```
+    
 
 
 # Check train vs test sets for bias
