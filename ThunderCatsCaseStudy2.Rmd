@@ -135,36 +135,23 @@ run_nn_model <- function(data, target, columns, interactions=c()){
    
 }
 #helper function for quick viz of percentage of employees that have left
-attrition_by_category <- function(category){
+attrition_by_category <- function(category, data){
 
 sql_statement = glue::glue('SELECT 
                                   {category}
                                   ,Attrition
                                   ,COUNT(*)*1.0  as Count
-                             FROM attrition_data 
+                             FROM data 
                              GROUP BY {category}
                                      , Attrition')  
   
 counts = sqldf(sql_statement)
 
-yes =sqldf("SELECT * FROM counts WHERE Attrition = 'Yes'")
-no =sqldf("SELECT * FROM counts WHERE Attrition = 'No'")
-
-yes_bar = ggplot(yes, aes(x=yes[,category], y=yes$Count, fill=yes[,category])) + geom_bar(stat = "identity") + labs(x = category, y='# Attrition', fill=category) 
-no_bar = ggplot(no, aes(x=no[,category], y=no$Count, fill=no[,category])) + geom_bar(stat = "identity") + labs(x = category, y='# Attrition', fill=category) 
-
-attrition_rates = sqldf(glue::glue('SELECT
-          y.{category},
-          y.Count as Departed,
-          n.Count as Employed,
-          (y.Count + n.Count) as Total,
-          (y.Count/(n.Count + y.Count)) as AttritionRate
-       FROM yes y
-       LEFT JOIN no n ON n.{category} = y.{category}'))
-plot(no_bar)
-plot(yes_bar)
-print(attrition_rates)
-#return(list(attrition_rates, yes_bar, no_bar))
+return(ggplot(counts, aes(counts[,category], counts$Count)) + geom_bar(aes(fill = Attrition), 
+   width = 0.4, position = position_dodge(width=0.5), stat="identity") +  
+   theme(legend.position="top", legend.title = 
+   element_text(),axis.title.x=element_text(), 
+   axis.title.y=element_text()))
 }
 
 #helper function for extracting col names
@@ -173,9 +160,12 @@ factor_columns <- function(dataFrame){
   return(colnames(dataFrame[,sapply(dataFrame, is.factor) & colnames(dataFrame) != "id"]))
 }
 ```
+
 ## EDA Phase 1: Plotting
   
   # By Age (abstract into histogram analysis?)
+  
+
   
 ## Variable Ranks
   
@@ -191,20 +181,8 @@ ggplot(data=stayed_data, aes(stayed_data$Age)) + geom_histogram(binwidth = 3)
 
 ```
 
-```{r}
-
-```
-
- # Analysis by factor
 
 
-```{r}
-factors = factor_columns(attrition_data)
-for(f in factors){
-  attrition_by_category(f)
-}
-
-```
 # Analysis:
   
   - Overtime seems to be an important factor when considering attrition rate. OF the 416 employees that worked overtime, nearly 30% of them left their positions.
@@ -286,8 +264,27 @@ run_nn_model(experiment_data, experiment_target, experiment_columns, experiment_
 
 
 ```
-    
 
+## Check target balances by factor
+
+```{r}
+experiment_data = loadData()
+experiment_factor_columms = c(
+                          'BusinessTravel'
+                        , 'EnvironmentSatisfaction'
+                        , 'OverTime'
+                        , 'JobInvolvement'
+                        , 'JobLevel'
+                        , 'JobSatisfaction'
+                        , 'MaritalStatus'
+                        , 'WorkLifeBalance')
+for(f in experiment_factor_columms){
+  print(attrition_by_category(f, experiment_data))
+}
+
+#TODO: Scatter the other fields?
+
+```
 
 # Check train vs test sets for bias
 
