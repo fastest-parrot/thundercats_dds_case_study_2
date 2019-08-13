@@ -20,7 +20,7 @@ test_train_split = 0.4
 ```
 ## UDFS
 
-  - loadData: Load the data
+  - load_data: Load the data
 
   - generate_interaction_string: Function for generating interaction terms
   
@@ -29,7 +29,7 @@ test_train_split = 0.4
   - run_linear_model: builds/test/summarizes a linear regression model using VGAM
   
   - run_neural_model: builds/test/summarizes a neuralnetwork model using nnet
-```{r, echo=FALSE}
+```{r}
 loadData <-function(){
   attrition_data = read.csv('atttrition.csv', stringsAsFactors=TRUE)
   drop_cols = c('Over18', 'EmployeeNumber', 'EmployeeCount', 'StandardHours')
@@ -58,7 +58,6 @@ generate_interaction_string <- function(columns){
 }
 
 build_model_string <- function(target, columns, interactions=c()){
-    
     model = c(columns, interactions)
     target_string = glue::glue("{target} ~ ")
     model_string = paste(model, collapse="+")
@@ -88,7 +87,7 @@ run_linear_model <- function(data, target, columns, interactions=c()){
     
     
     #Summarize the model
-    print(summary(linear_model))
+    #print(summary(linear_model))
     
     #Run Predictions
     x<-select(test, -target)
@@ -100,10 +99,10 @@ run_linear_model <- function(data, target, columns, interactions=c()){
     test$pred_log_reg[which(test$pred_log_reg=="2")]<-levels(test[,target])[2]
     
     
-    str(f)
     #Accuracy of the model
     mtab<-table(test$pred_log_reg,test[,target])
-    confusionMatrix(mtab)
+    confusion = confusionMatrix(mtab)
+    return(list(linear_model, f, mtab, confusion))
 }
 run_nn_model <- function(data, target, columns, interactions=c()){
     model = c(columns, interactions)
@@ -127,7 +126,7 @@ run_nn_model <- function(data, target, columns, interactions=c()){
     
     
     #Summarize the model
-    print(summary(neural_model))
+    #print(summary(neural_model))
     
     #Run Predictions
     x<-select(test, -target)
@@ -135,13 +134,13 @@ run_nn_model <- function(data, target, columns, interactions=c()){
     
     #Predict using the model
     test$pred_nnet<-predict(neural_model,x,type='class')
-    str(f)
+    #str(f)
     #Accuracy of the model
   
     mtab<-table(test$pred_nnet,test[,target])
-    print(summary(mtab))
-    confusionMatrix(mtab)
-    
+    #print(summary(mtab))
+    confusion = confusionMatrix(mtab)
+    return(list(neural_model, f, mtab, confusion))
     
   
    
@@ -170,7 +169,7 @@ attrition_rates = sqldf(glue::glue('SELECT
        LEFT JOIN no n ON n.{category} = y.{category}'))
 print(attrition_rates)
 return(ggplot(counts, aes(counts[,category], counts$Count)) + geom_bar(aes(fill = Attrition), 
-   width = 0.4, position = position_dodge(width=0.5), stat="identity") +  
+   width = 0.4, position = position_dodge(width=0.5), stat="identity") + xlab(category) +
    theme(legend.position="top", legend.title = 
    element_text(),axis.title.x=element_text(), 
    axis.title.y=element_text()))
@@ -187,78 +186,49 @@ non_factor_columns <- function(dataFrame){
 }
 
 
-plotSatisfaction <- function(category, data){
+plotSatisfaction <- function(category, data, label){
   sql = glue::glue('SELECT
                    {category},
+                   Attrition,
                    AVG(satisfaction_index) as AverageHappiness
                    FROM data
-                   GROUP BY {category}')
+                   GROUP BY {category}, Attrition')
   happiness = sqldf(sql)
-  return(ggplot(happiness, aes(happiness[,category], happiness$AverageHappiness)) + geom_bar(aes(fill = category), 
+  return(ggplot(happiness, aes(happiness[,category], happiness$AverageHappiness)) + geom_bar(aes(fill = factor(happiness[,category])), 
    width = 0.4, position = position_dodge(width=0.5), stat="identity") + coord_flip() +  
-   xlab(category) + ylab('Happiness')) 
+   xlab(glue::glue('{category} {label}')) + ylab('Happiness')) 
 }
 ```
 
 ## EDA Exploratory Questions
   
-   # Job Satisfaction
+   Job Satisfaction
     
    As a proxy for happiness with current employment, we will construct an index = EnvironmentSatisfaction + JobInvolvement + JobSatisfaction (tried this - didn't do much) and look for trends across the categorical variables.
    
 ```{r, echo=FALSE}
 satisfaction_data = loadData()
-satisfaction_data = sqldf('SELECT s.*,  
+stayed = sqldf("SELECT s.*,  
                             JobSatisfaction as satisfaction_index
-                            FROM satisfaction_data s')
-
-for(x in factor_columns(satisfaction_data)){
-  if(x != 'Attrition'){  print(plotSatisfaction(x, satisfaction_data))
+                            FROM satisfaction_data s
+                            WHERE Attrition = 'No'")
+left = sqldf("SELECT s.*,  
+                            JobSatisfaction as satisfaction_index
+                            FROM satisfaction_data s
+                            WHERE Attrition = 'Yes'")
+for(x in factor_columns(stayed)){
+  if(x != 'Attrition'){  print(plotSatisfaction(x, stayed, '-Stayed'))
+    print(plotSatisfaction(x, left, '-Departed'))
   }
 }
-non_factor_columns(satisfaction_data)
-for(x in non_factor_columns(satisfaction_data)){
-  average_happiness = sqldf(glue::glue('SELECT 
-                                       {x},
-                                       AVG(satisfaction_index) as average_happiness
-                                       FROM satisfaction_data 
-                                       GROUP BY {x}'))
-  print(ggplot(data=average_happiness, aes(x=glue::glue('{x}'), y='average_happiness')) + geom_point()
-        + xlab(x))
-  #qplot(satisfaction_data[,c(x, 'satisfaction_index')],  binwidth = 1.0, geom = "histogram", xlab = x, ylab = "satisfaction_index",
-  #    y = ..density.., fill = I("white"), colour = I("black")) +
-  #stat_density(geom = "line")
-}
+
 ```
-## Analysis:
-  
-    Job satisfaction as measured by the JobSatisfaction field alone seems somewhat constant across categorical variables.
-    By job role, healthcare reps and research scientists seems to be most satisfied with their job.
-  
+
 ## Variable Ranks
+
+    Run a regression on full model to scan for variables of importance
   
-  #Colinearity checks?
-```{r}
-attrition_data = loadData()
-#let's partiton by attrition and look at the data a bit
-left_data = sqldf("SELECT * FROM attrition_data WHERE Attrition = 'Yes'")
-stayed_data = sqldf("SELECT * FROM attrition_data WHERE Attrition = 'No'")
-histogram_fields = c('Age', 'HourlyRate', 'MonthlyRate', 'DailyRate', 'DistanceFromHome', 'MonthlyIncome', 'PercentSalaryHike', 'TotalWorkingYears', 'YearsWithCurrentManager')
-for(field in histogram_fields)
-{
-    print(ggplot(data=left_data, aes(left_data[,field])) + geom_histogram())
-    #print(ggplot(data=stayed_data, aes(stayed_data[,field]) + geom_histogram()))
-}
-
-```
-
-
-
-# Analysis:
-  
-  - Overtime seems to be an important factor when considering attrition rate. OF the 416 employees that worked overtime, nearly 30% of them left their positions.
-  
-```{r}
+```{r, echo=FALSE}
 experiment_data = loadData()
 experiment_target = c('Attrition')
 experiment_columns = c(
@@ -293,15 +263,33 @@ experiment_columns = c(
                         , 'YearsSinceLastPromotion'
                         , 'YearsWithCurrManager')
 
-experiment_interactions = generate_interaction_string(experiment_columns[2])
-run_linear_model(experiment_data, experiment_target, experiment_columns, experiment_interactions)
+experiment_interactions = generate_interaction_string(c('EnvironmentSatisfaction', 'OverTime', 'WorkLifeBalance'))
+linear_results = run_linear_model(experiment_data, experiment_target, experiment_columns, experiment_interactions)
+```
 
-#run_nn_model(experiment_data, experiment_target, experiment_columns, experiment_interactions)
+```{r}
+contrast_formula = linear_results[[2]]
+print(contrast_formula)
+summary(linear_results[[1]])
+```
+
+  
+```{r, echo=FALSE}
+summary(linear_results[[3]])
+```
+
+## Confusion Matrix
+
+```{r}
+linear_results[[4]]
 ```
 ## Full model analysis
 
-    Accuracy of 84.17% vs target balance of {}
+    Accuracy of 86.57% / 70.82% Balanced 
     
+    Overall - the model shows a solid gain against the naive classifier  (No Information Rate 82.13% vs Acc of 86.57%)
+              
+              p-value indicates strong statistical likelihood
     
     Statistically Significant Features:
     
@@ -329,12 +317,56 @@ experiment_columns = c(
                         , 'YearsSinceLastPromotion'
                         , 'YearsWithCurrManager')
 
-experiment_interactions =c()# c('JobLevel:YearsSinceLastPromotion:EnvironmentSatisfaction')
-run_linear_model(experiment_data, experiment_target, experiment_columns, experiment_interactions)
-run_nn_model(experiment_data, experiment_target, experiment_columns, experiment_interactions)
+experiment_interactions = generate_interaction_string(c('EnvironmentSatisfaction', 'WorkLifeBalance'))# c()
+final_linear = run_linear_model(experiment_data, experiment_target, experiment_columns, experiment_interactions)
+final_nn = run_nn_model(experiment_data, experiment_target, experiment_columns, experiment_interactions)
 
 
 ```
+
+
+```{r}
+contrast_formula = final_linear[[2]]
+print(contrast_formula)
+summary(final_linear[[1]])
+```
+
+## Neural Network Results
+
+```{r}
+summary(final_nn[[1]])
+```
+
+   
+    
+## Confusion Matrix (reduced)
+
+```{r}
+final_linear[[4]]
+```
+## Reduced model analysis
+
+    Accuracy of 85.01% / 65.14% Balanced 
+    
+    Overall - the model shows a lesser gain against the naive classifier  (No Information Rate 82.13% vs Acc of 85.01%)
+              
+              p-value indicates  statistical likelihood
+              
+    Reduced model gets a close fit to the full model with far fewer variables. Further analysis is warranted to search for 
+    new interaction terms and other possible variable combinations/transformations. The code above can be abstracted for 
+    that task as an exercise for the user :)
+    
+## Confusion Matrix (neural)
+
+    Because - why not???
+
+```{r}
+final_nn[[4]]
+```  
+## Barf 
+
+    Neural network is dog poop - probably needs some hyper parameter tuning. Also left as an exercise for the user :)
+
 
 ## Check target balances by factor
 
@@ -348,7 +380,8 @@ experiment_factor_columms = c(
                         , 'JobLevel'
                         , 'JobSatisfaction'
                         , 'MaritalStatus'
-                        , 'WorkLifeBalance')
+                        , 'WorkLifeBalance'
+                        , 'StockOptionLevel')
 
 
 for(f in experiment_factor_columms){
